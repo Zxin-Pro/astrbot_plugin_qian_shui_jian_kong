@@ -35,7 +35,7 @@
 ==========================================
     /潜水 list [群号]                          查看潜水排行榜
     /潜水 set_threshold <天数> [群号]          设置阈值（管理员）
-    /潜水 set_warning <天数> [群号]            设置预警天数（管理员）
+    /潜水 设置预警 <天数> [群号]            设置预警天数（管理员）
     /潜水 whitelist add/remove <@用户|QQ号>    群级白名单管理（管理员）
     /潜水 whitelist show                       查看本群白名单
     /潜水 report [群号]                        手动发送监测报告
@@ -66,7 +66,7 @@ except ImportError:  # 兜底：平铺目录导入
     from notifier import Notifier
     from storage import LurkerStorage, new_member_record
 
-PLUGIN_VERSION = "v1.0.10"
+PLUGIN_VERSION = "v1.0.12"
 PLUGIN_NAME = "astrbot_plugin_qian_shui_jian_kong"
 
 DAY_SECONDS = 86400
@@ -203,15 +203,18 @@ class QianShuiJianKongPlugin(Star):
         if self.storage is None or self.cfg is None or not self.storage.has_group(group_id):
             return error_response("Group is not monitored", status_code=404)
         payload = await request.json(default={})
-        if not isinstance(payload, dict) or "warning_days" not in payload:
-            return error_response("warning_days is required", status_code=400)
+        if not isinstance(payload, dict):
+            return error_response("settings must be an object", status_code=400)
         try:
-            warning_days = int(str(payload["warning_days"]).strip())
+            threshold = int(str(payload.get("threshold_days", self.cfg.get_group("threshold_days", group_id))).strip())
+            warning_days = int(str(payload.get("warning_days", self.cfg.get_group("warning_days", group_id))).strip())
         except (TypeError, ValueError):
-            return error_response("warning_days must be an integer", status_code=400)
-        threshold = max(1, int(self.cfg.get_group("threshold_days", group_id)))
+            return error_response("threshold_days and warning_days must be integers", status_code=400)
+        if threshold < 1:
+            return error_response("threshold_days must be at least 1", status_code=400)
         if warning_days < 0 or warning_days >= threshold:
             return error_response(f"warning_days must be between 0 and {threshold - 1}", status_code=400)
+        await self.storage.set_group_config(group_id, "threshold_days", threshold)
         await self.storage.set_group_config(group_id, "warning_days", warning_days)
         return json_response({"saved": True, "warning_days": warning_days, "threshold_days": threshold})
 
@@ -886,7 +889,7 @@ class QianShuiJianKongPlugin(Star):
         warning = int(self.cfg.get_group("warning_days", gid))
         if int(days) <= warning:
             yield event.plain_result(
-                f"❌ 阈值必须大于预警天数（当前预警 {warning} 天），请先调整 set_warning"
+                f"❌ 阈值必须大于预警天数（当前预警 {warning} 天），请先调整 设置预警"
             )
             return
         old = self.cfg.get_group("threshold_days", gid)
