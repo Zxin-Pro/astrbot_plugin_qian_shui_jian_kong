@@ -1,0 +1,71 @@
+{
+    "threshold_days": {
+        "description": "潜水天数阈值：成员连续无发言达到该天数后，进入踢人评估流程",
+        "type": "int",
+        "default": 7,
+        "hint": "建议 7～30 天；各群可用指令 /lurker set_threshold <天数> 单独覆盖此值",
+        "obvious_hint": true
+    },
+    "warning_days": {
+        "description": "提前预警天数：潜水天数 ≥ (阈值 - 预警天数) 时自动 @ 该成员发送警告",
+        "type": "int",
+        "default": 2,
+        "hint": "例如阈值 7、预警 2：成员潜水满 5 天时开始收到 @ 警告"
+    },
+    "check_interval": {
+        "description": "活跃检查间隔（秒）：每隔该时长扫描一次所有受监控群的成员潜水状态",
+        "type": "int",
+        "default": 3600,
+        "hint": "最小 60 秒；扫描频率越高，警告/踢出越及时，但 LLM 决策调用量也越大"
+    },
+    "daily_report_time": {
+        "description": "每日报告发送时间（24 小时制 HH:MM）：每天该时刻向各群推送潜水排行榜",
+        "type": "string",
+        "default": "08:00",
+        "hint": "使用机器人服务器所在时区；各群可用 /lurker set_report_time 思路修改群独立配置，或直接改这里作为全局默认"
+    },
+    "enable_llm_decision": {
+        "description": "启用 LLM 智能决策：成员达到踢人阈值时，先让大模型结合成员数据分析是否真的应该移出",
+        "type": "bool",
+        "default": true,
+        "hint": "关闭后达到阈值将按规则直接踢出（仍受白名单保护）；需要在 WebUI 中配置好可用的 LLM 提供商"
+    },
+    "warn_before_kick": {
+        "description": "踢人前发送最终警告：执行移出前先 @ 该成员发送最后通牒",
+        "type": "bool",
+        "default": true
+    },
+    "groups_to_monitor": {
+        "description": "要监控的群号列表：留空表示监控机器人所在的所有群",
+        "type": "list",
+        "default": [],
+        "hint": "填写群号（字符串数字）；修改后插件保存时会自动热重载，也可用 /lurker init 立即重新拉取成员"
+    },
+    "whitelist": {
+        "description": "白名单用户 ID（全局）：白名单成员不会被警告/踢出，排行榜中显示 ⭐ 标识",
+        "type": "list",
+        "default": [],
+        "hint": "填写 QQ 号（字符串数字）；群级独立白名单请用指令 /lurker whitelist add/remove <@用户> 维护，两份名单会合并生效"
+    },
+    "report_top_n": {
+        "description": "排行榜显示人数：每日报告与 /lurker list 中最多列出多少名潜水成员",
+        "type": "int",
+        "default": 10
+    },
+    "max_warns_per_round": {
+        "description": "每轮警告人数上限：0 = 不限制（预警区内所有人都会被 @ 警告）；设为正数可在大群限流防刷屏",
+        "type": "int",
+        "default": 0
+    },
+    "max_kick_evals_per_round": {
+        "description": "每轮踢人评估人数上限：0 = 不限制（所有达阈值成员都会进入评估）；设为正数可控制 LLM 调用量",
+        "type": "int",
+        "default": 0
+    },
+    "warn_template": {
+        "description": "预警 @ 警告文案模板：支持占位符 {name} 昵称、{days} 已潜水时长、{warn_line} 预警线天数、{threshold} 阈值天数、{remain} 距阈值剩余时长、{group} 群号；消息会自动 @ 该成员，无需在模板里写 @；支持多行",
+        "type": "text",
+        "default": "⚠️ 潜水预警：你已连续 {days} 未在本群发言（预警线 {warn_line} 天，阈值 {threshold} 天）。再潜水约 {remain} 将进入移出评估，快来冒个泡吧～",
+        "hint": "可用变量：{name} {days} {remain} {warn_line} {threshold} {group}；未知占位符会原样保留"
+    }
+}
