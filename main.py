@@ -66,7 +66,7 @@ except ImportError:  # 兜底：平铺目录导入
     from notifier import Notifier
     from storage import LurkerStorage, new_member_record
 
-PLUGIN_VERSION = "v1.0.9"
+PLUGIN_VERSION = "v1.0.10"
 PLUGIN_NAME = "astrbot_plugin_qian_shui_jian_kong"
 
 DAY_SECONDS = 86400
@@ -160,6 +160,7 @@ class QianShuiJianKongPlugin(Star):
         context.register_web_api(f"/{PLUGIN_NAME}/dashboard", self.page_dashboard, ["GET"], "Lurker dashboard data")
         context.register_web_api(f"/{PLUGIN_NAME}/groups/<group_id>", self.page_group, ["GET"], "Lurker group details")
         context.register_web_api(f"/{PLUGIN_NAME}/groups/<group_id>/whitelist", self.page_whitelist, ["POST"], "Update group whitelist")
+        context.register_web_api(f"/{PLUGIN_NAME}/groups/<group_id>/settings", self.page_group_settings, ["POST"], "Update group settings")
 
     async def page_dashboard(self):
         """Return a compact, read-only overview for the Plugin Page."""
@@ -196,6 +197,23 @@ class QianShuiJianKongPlugin(Star):
             members.append({"id": uid, "name": rec.get("username") or uid, "role": rec.get("role") or "member", "idle_days": round(days, 1), "whitelisted": uid in whitelist})
         members.sort(key=lambda item: item["idle_days"], reverse=True)
         return json_response({"id": gid, "name": self.storage.get_group_name(gid) or gid, "members": members, "group_whitelist": self.storage.get_group_config(gid).get("whitelist", []), "settings": {key: self.cfg.get_group(key, gid) for key in ("threshold_days", "warning_days", "warn_before_kick", "max_warns_per_round", "max_kick_evals_per_round")}})
+
+    async def page_group_settings(self, group_id: str):
+        """Update settings that are independently overridden for one group."""
+        if self.storage is None or self.cfg is None or not self.storage.has_group(group_id):
+            return error_response("Group is not monitored", status_code=404)
+        payload = await request.json(default={})
+        if not isinstance(payload, dict) or "warning_days" not in payload:
+            return error_response("warning_days is required", status_code=400)
+        try:
+            warning_days = int(str(payload["warning_days"]).strip())
+        except (TypeError, ValueError):
+            return error_response("warning_days must be an integer", status_code=400)
+        threshold = max(1, int(self.cfg.get_group("threshold_days", group_id)))
+        if warning_days < 0 or warning_days >= threshold:
+            return error_response(f"warning_days must be between 0 and {threshold - 1}", status_code=400)
+        await self.storage.set_group_config(group_id, "warning_days", warning_days)
+        return json_response({"saved": True, "warning_days": warning_days, "threshold_days": threshold})
 
     async def page_whitelist(self, group_id: str):
         """Replace the group-local whitelist. Dashboard auth is enforced upstream."""
