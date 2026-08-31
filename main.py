@@ -66,7 +66,7 @@ except ImportError:  # 兜底：平铺目录导入
     from notifier import Notifier
     from storage import LurkerStorage, new_member_record
 
-PLUGIN_VERSION = "v1.0.6"
+PLUGIN_VERSION = "v1.0.7"
 PLUGIN_NAME = "astrbot_plugin_qian_shui_jian_kong"
 
 DAY_SECONDS = 86400
@@ -278,8 +278,8 @@ class QianShuiJianKongPlugin(Star):
                 total_members = 0
                 inited = 0
                 for gid, info in groups.items():
-                    if monitor and gid not in monitor:
-                        continue  # 不在 WebUI 配置的监控名单里
+                    if gid not in monitor:
+                        continue  # 只有明确填写的目标群才启用监控
                     if await self._init_group(gid, info):
                         inited += 1
                         total_members += len(self.storage.get_members(gid))
@@ -295,7 +295,7 @@ class QianShuiJianKongPlugin(Star):
                     else "（协议端可能尚未连接就绪，继续等待）"
                 )
                 logger.warning(f"[qian_shui_jian_kong] 暂未获取到群列表（第 {attempt}/{max_attempts} 次），{tip}")
-        logger.warning("[qian_shui_jian_kong] 自动初始化未获取到任何群，机器人收到群消息时会自动纳管，也可手动执行 /lurker init")
+        logger.warning("[qian_shui_jian_kong] 自动初始化未获取到目标群，机器人收到群消息时不会自动纳管，请填写目标群号后执行 /潜水 初始化")
 
     async def _init_group(self, gid: str, info: dict) -> bool:
         """拉取单个群的全量成员并写入存储（保留已有成员的活跃数据）。"""
@@ -318,20 +318,29 @@ class QianShuiJianKongPlugin(Star):
             username = str(m.get("card") or m.get("nickname") or uid)
             role = str(m.get("role") or "member")
             if uid in existing:
-                # 已纳管：刷新昵称/群身份，保留历史活跃/警告状态
+                # 已纳管：刷新昵称/群身份，保留插件记录中的历史活跃状态。
                 rec = existing[uid]
                 rec["username"] = username
                 rec["role"] = role
+                # 兼容旧版本：首次纳管可能把两项时间都写成当前时间。
+                # 成员尚未产生插件观测消息时，恢复 OneBot 的历史最后发言时间。
+                if rec.get("first_seen") == rec.get("last_message_time"):
+                    try:
+                        last_sent = float(m.get("last_sent_time") or 0)
+                    except (TypeError, ValueError):
+                        last_sent = 0.0
+                    if 0 < last_sent <= now:
+                        rec["last_message_time"] = last_sent
                 mapping[uid] = rec
             else:
-                # 新纳管：一律从当前时间起算（完全宽限）。
-                # 不采信协议端的 last_sent_time：该字段在部分协议端实现中不可靠
-                # （恒为 0 或过期），且机器人入群前的历史无法核实——以其作为
-                # 惩罚依据会造成"刚入群就误读潜水状态"的误判。
-                # 只有机器人自己观察到的沉默才计入潜水天数；
-                # /lurker init 重初始化时，已跟踪成员的历史活跃数据仍会保留
-                # （那是机器人观测到的真实数据，见上方 existing 分支）。
-                mapping[uid] = new_member_record(now, now, username, role)
+                # 新纳管：优先沿用 OneBot 提供的最后发言时间；没有有效记录时
+                # 才从当前时间起算，避免无发言记录的成员被误判为长期潜水。
+                try:
+                    last_sent = float(m.get("last_sent_time") or 0)
+                except (TypeError, ValueError):
+                    last_sent = 0.0
+                last_msg = last_sent if 0 < last_sent <= now else now
+                mapping[uid] = new_member_record(now, last_msg, username, role)
 
         self.storage.init_members(gid, mapping)
         self.storage.upsert_group(gid, info.get("platform_id", ""), info.get("group_name", ""))
@@ -379,12 +388,12 @@ class QianShuiJianKongPlugin(Star):
             logger.error(f"[qian_shui_jian_kong] 处理群消息出错: {e}\n" + traceback.format_exc())
 
     def _maybe_adopt_group(self, gid: str):
-        """机器人进入新群后收到首条消息时，自动把该群纳入监控（去重 + 后台执行）。"""
+        """机器人进入目标群后收到首条消息时，按配置尝试纳入监控。"""
         if gid in self._pending_group_inits or not self.storage or not self.cfg:
             return
         monitor = set(self.cfg.get_monitor_groups()) if self.cfg else set()
-        if monitor and gid not in monitor:
-            return  # 用户明确只监控部分群
+        if not monitor or gid not in monitor:
+            return  # 必须明确填写目标群号才启用监控
         self._pending_group_inits.add(gid)
 
         async def _adopt():
