@@ -27,8 +27,9 @@ DEFAULTS = {
     "check_interval": 3600,     # 检查间隔（秒）
     "daily_report_time": "08:00",  # 每日报告时间（HH:MM）
     "enable_llm_decision": True,   # 是否启用 LLM 智能决策
+    "enable_auto_kick": True,      # 是否启用自动踢人
     "warn_before_kick": True,      # 踢人前是否发送最终警告
-    "groups_to_monitor": [],    # 要监控的群号列表（空 = 全部）
+    "groups_to_monitor": [],    # 要监控的群号列表（空 = 不监控任何群）
     "whitelist": [],            # 全局白名单用户 ID
     "report_top_n": 10,         # 排行榜显示人数
     "max_warns_per_round": 0,       # 每轮警告人数上限（0 = 不限制）
@@ -42,6 +43,7 @@ GROUP_OVERRIDABLE = frozenset({
     "threshold_days",
     "warning_days",
     "enable_llm_decision",
+    "enable_auto_kick",
     "warn_before_kick",
     "max_warns_per_round",
     "max_kick_evals_per_round",
@@ -50,7 +52,7 @@ GROUP_OVERRIDABLE = frozenset({
 
 _INT_KEYS = frozenset({"threshold_days", "warning_days", "check_interval", "report_top_n",
                        "max_warns_per_round", "max_kick_evals_per_round"})
-_BOOL_KEYS = frozenset({"enable_llm_decision", "warn_before_kick"})
+_BOOL_KEYS = frozenset({"enable_llm_decision", "enable_auto_kick", "warn_before_kick"})
 _LIST_KEYS = frozenset({"groups_to_monitor", "whitelist"})
 _STR_KEYS = frozenset({"daily_report_time"})
 
@@ -103,7 +105,7 @@ class PluginConfig:
         return max(60, self.get_global("check_interval"))
 
     def get_monitor_groups(self):
-        """要监控的群号列表（字符串），空列表表示监控所有群。"""
+        """要监控的群号列表（字符串），空列表表示不监控任何群。"""
         return self.get_global("groups_to_monitor")
 
     # ------------------------------------------------------------------

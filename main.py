@@ -66,7 +66,7 @@ except ImportError:  # 兜底：平铺目录导入
     from notifier import Notifier
     from storage import LurkerStorage, new_member_record
 
-PLUGIN_VERSION = "v1.0.3"
+PLUGIN_VERSION = "v1.0.5"
 PLUGIN_NAME = "astrbot_plugin_lurker_watcher"
 
 DAY_SECONDS = 86400
@@ -491,6 +491,9 @@ class LurkerWatcherPlugin(Star):
                 logger.debug(f"[lurker_watcher] 群 {gid} 处于初始化保护期，本轮跳过 {len(kick_candidates)} 名候选")
             return
 
+        if not bool(self.cfg.get_group("enable_auto_kick", gid)):
+            return
+
         evaluated = 0
         # max_kick_evals_per_round=0 表示不限量，默认所有达阈值成员都会进入评估
         max_evals = int(self.cfg.get_group("max_kick_evals_per_round", gid))
@@ -703,7 +706,7 @@ class LurkerWatcherPlugin(Star):
     def _is_monitored(self, gid) -> bool:
         """群是否在 WebUI 配置的监控范围内（groups_to_monitor 为空表示全部）。"""
         monitor = self.cfg.get_monitor_groups()
-        return (not monitor) or (str(gid) in monitor)
+        return bool(monitor) and (str(gid) in monitor)
 
     def _resolve_target_group(self, event: AstrMessageEvent, arg: str):
         """解析指令的目标群号。
@@ -754,9 +757,9 @@ class LurkerWatcherPlugin(Star):
     # ==================================================================
     # 指令注册（指令组：/lurker）
     # ==================================================================
-    @filter.command_group("lurker")
+    @filter.command_group("潜水")
     async def lurker(self, event: AstrMessageEvent):
-        """潜水监测指令组（单独发送 /lurker 可查看全部子指令）"""
+        """潜水监测指令组（单独发送 /潜水 可查看全部子指令）"""
         # 注意：指令组的根函数不会被执行 —— 用户只输入 /lurker 时，
         # AstrBot 会自动抛出带指令树的参数不足提示（见 CommandGroupFilter）。
 
@@ -783,10 +786,49 @@ class LurkerWatcherPlugin(Star):
         )
         yield event.plain_result(text)
 
+    @lurker.command("预警")
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    async def lurker_warn_now(self, event: AstrMessageEvent, group_id: str = ""):
+        """立即 @ 当前群已到预警线但尚未达到踢人红线的成员。"""
+        if not event.is_admin():
+            yield event.plain_result("🚫 该指令需要 AstrBot 管理员权限")
+            return
+        gid, err = self._resolve_target_group(event, group_id)
+        if err:
+            yield event.plain_result(err)
+            return
+        info = self.storage.list_groups().get(gid, {})
+        now = time.time()
+        threshold = max(1, int(self.cfg.get_group("threshold_days", gid)))
+        warning_days = max(0, min(int(self.cfg.get_group("warning_days", gid)), threshold - 1))
+        warn_line = max(1, threshold - warning_days)
+        whitelist = self.cfg.get_whitelist(gid)
+        candidates = []
+        for uid, rec in self.storage.get_members(gid).items():
+            if uid in whitelist or str(rec.get("role") or "").lower() in ("owner", "admin"):
+                continue
+            try:
+                days = max(0.0, (now - float(rec.get("last_message_time") or now)) / DAY_SECONDS)
+            except (TypeError, ValueError):
+                continue
+            if warn_line <= days < threshold:
+                candidates.append((days, uid, rec))
+        if not candidates:
+            yield event.plain_result(f"ℹ️ 群 {gid} 当前没有即将到预警线的成员")
+            return
+        sent = 0
+        for days, uid, rec in sorted(candidates, reverse=True):
+            chain = self.notifier.build_warn_chain(uid, rec.get("username", ""), days, threshold, warning_days, template=self.cfg.get_group("warn_template", gid), group_id=gid)
+            if await self.notifier.send_group_chain(info.get("platform_id", ""), gid, chain):
+                self.storage.set_member_fields(gid, uid, warned_at=now)
+                sent += 1
+        await self.storage.flush()
+        yield event.plain_result(f"✅ 已立即 @ 群 {gid} 中 {sent} 名即将到红线的成员")
+
     @lurker.command("set_threshold")
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def lurker_set_threshold(self, event: AstrMessageEvent, days: str = "", group_id: str = ""):
-        """设置潜水天数阈值（本群生效；可附带群号为指定群设置，写入群独立配置）"""
+        """设置潜水天数阈值（本群生效；可附带群号为指定群设置）"""
         # 纵深防御：除框架级 permission_type 过滤外，handler 内部再校验一次
         if not event.is_admin():
             yield event.plain_result("🚫 该指令需要 AstrBot 管理员权限")

@@ -30,6 +30,11 @@
         "default": true,
         "hint": "关闭后达到阈值将按规则直接踢出（仍受白名单保护）；需要在 WebUI 中配置好可用的 LLM 提供商"
     },
+    "enable_auto_kick": {
+        "description": "启用自动踢人：关闭后仍会统计和发送预警，但不会定时自动移出成员",
+        "type": "bool",
+        "default": true
+    },
     "warn_before_kick": {
         "description": "踢人前发送最终警告：执行移出前先 @ 该成员发送最后通牒",
         "type": "bool",
