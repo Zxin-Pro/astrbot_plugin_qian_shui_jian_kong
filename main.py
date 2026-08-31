@@ -31,7 +31,7 @@
   已封装在 member_fetcher.MemberFetcher 中（即需求中的
   kick_group_member 等方法的落地点）。
 
-指令一览（/lurker 可查看自动生成的指令树）
+指令一览（/潜水 可查看自动生成的指令树）
 ==========================================
     /lurker list [群号]                          查看潜水排行榜
     /lurker set_threshold <天数> [群号]          设置阈值（管理员）
@@ -704,7 +704,7 @@ class LurkerWatcherPlugin(Star):
     # 工具函数
     # ==================================================================
     def _is_monitored(self, gid) -> bool:
-        """群是否在 WebUI 配置的监控范围内（groups_to_monitor 为空表示全部）。"""
+        """群是否在 WebUI 配置的监控范围内（groups_to_monitor 为空表示不监控任何群）。"""
         monitor = self.cfg.get_monitor_groups()
         return bool(monitor) and (str(gid) in monitor)
 
@@ -763,7 +763,7 @@ class LurkerWatcherPlugin(Star):
         # 注意：指令组的根函数不会被执行 —— 用户只输入 /lurker 时，
         # AstrBot 会自动抛出带指令树的参数不足提示（见 CommandGroupFilter）。
 
-    @lurker.command("list")
+    @lurker.command("查看")
     async def lurker_list(self, event: AstrMessageEvent, group_id: str = ""):
         """查看群潜水排行榜（可附带群号跨群查询，跨群需管理员）"""
         gid, err = self._resolve_target_group(event, group_id)
@@ -825,7 +825,7 @@ class LurkerWatcherPlugin(Star):
         await self.storage.flush()
         yield event.plain_result(f"✅ 已立即 @ 群 {gid} 中 {sent} 名即将到红线的成员")
 
-    @lurker.command("set_threshold")
+    @lurker.command("设置阈值")
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def lurker_set_threshold(self, event: AstrMessageEvent, days: str = "", group_id: str = ""):
         """设置潜水天数阈值（本群生效；可附带群号为指定群设置）"""
@@ -854,7 +854,7 @@ class LurkerWatcherPlugin(Star):
             f"（预警线 {int(days) - warning} 天，已写入该群的独立配置）"
         )
 
-    @lurker.command("set_warning")
+    @lurker.command("设置预警")
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def lurker_set_warning(self, event: AstrMessageEvent, days: str = "", group_id: str = ""):
         """设置提前预警天数（本群生效；可附带群号为指定群设置）"""
@@ -882,7 +882,7 @@ class LurkerWatcherPlugin(Star):
             f"（阈值 {threshold} 天，潜水满 {threshold - int(days)} 天开始 @ 警告）"
         )
 
-    @lurker.command("whitelist")
+    @lurker.command("白名单")
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def lurker_whitelist(
         self, event: AstrMessageEvent, action: str = "", target: str = ""
@@ -896,6 +896,7 @@ class LurkerWatcherPlugin(Star):
             yield event.plain_result("❌ 请在群聊中使用本指令（白名单按群独立维护）")
             return
         action = action.strip().lower()
+        action = {"添加": "add", "移除": "remove", "删除": "remove", "查看": "show"}.get(action, action)
         group_cfg = self.storage.get_group_config(gid)
         wl = [str(x) for x in group_cfg.get("whitelist", []) or []]
 
@@ -939,7 +940,7 @@ class LurkerWatcherPlugin(Star):
             "        /lurker whitelist show"
         )
 
-    @lurker.command("report")
+    @lurker.command("报告")
     async def lurker_report(self, event: AstrMessageEvent, group_id: str = ""):
         """手动发送当前群的潜水监测报告（可附带群号）"""
         gid, err = self._resolve_target_group(event, group_id)
@@ -954,7 +955,7 @@ class LurkerWatcherPlugin(Star):
             if not event.get_group_id():  # 私聊触发时反馈一下
                 yield event.plain_result(f"✅ 已向群 {gid} 发送监测报告")
 
-    @lurker.command("init")
+    @lurker.command("初始化")
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def lurker_init(self, event: AstrMessageEvent, group_id: str = ""):
         """重新拉取群成员并初始化（附带群号则只初始化该群，否则刷新所有受监控群）"""
