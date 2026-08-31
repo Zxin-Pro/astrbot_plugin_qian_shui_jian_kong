@@ -1,6 +1,6 @@
-name: astrbot_plugin_lurker_watcher
-display_name: 潜水监测助手
-desc: 群潜水监测插件：自动监控全体群成员活跃度，每日定时发布潜水排行榜，预警期自动 @ 警告，达到阈值后结合 LLM 智能决策自动移出长期潜水成员。支持 WebUI 可视化配置、白名单与多群独立配置。
-version: v1.0.5
-author: BYDXDM
-repo: https://github.com/BYDXDM/astrbot_plugin_lurker_watcher
+name: astrbot_plugin_qian_shui_jian_kong
+display_name: 潜水监控
+desc: 群潜水监控插件：按目标群号监控成员活跃度，每日发布潜水排行榜，预警期自动 @ 警告，达到红线后自动移出。支持 WebUI 配置、白名单与多群独立配置。
+version: v1.0.6
+author: Zxin-Pro
+repo: https://github.com/Zxin-Pro/astrbot_plugin_qian_shui_jian_kong

@@ -87,7 +87,7 @@ class MemberFetcher:
                 if uid:
                     self_ids.add(uid)
             except Exception as e:
-                logger.debug(f"[lurker_watcher] 获取机器人自身账号失败: {e}")
+                logger.debug(f"[qian_shui_jian_kong] 获取机器人自身账号失败: {e}")
         return self_ids
 
     def has_adapter(self) -> bool:
@@ -109,7 +109,7 @@ class MemberFetcher:
             try:
                 groups = await adapter.bot.call_action("get_group_list")
             except Exception as e:
-                logger.warning(f"[lurker_watcher] 平台 {pid} 获取群列表失败: {e}")
+                logger.warning(f"[qian_shui_jian_kong] 平台 {pid} 获取群列表失败: {e}")
                 continue
             for g in groups or []:
                 gid = str(g.get("group_id", "")).strip()
@@ -130,7 +130,7 @@ class MemberFetcher:
         """
         adapter = self.get_adapter(platform_id)
         if adapter is None:
-            logger.warning(f"[lurker_watcher] 未找到平台实例 {platform_id}，无法拉取群 {gid} 成员")
+            logger.warning(f"[qian_shui_jian_kong] 未找到平台实例 {platform_id}，无法拉取群 {gid} 成员")
             return None
         try:
             members = await adapter.bot.call_action(
@@ -138,7 +138,7 @@ class MemberFetcher:
             )
             return members or []
         except Exception as e:
-            logger.error(f"[lurker_watcher] 拉取群 {gid} 成员列表失败: {e}")
+            logger.error(f"[qian_shui_jian_kong] 拉取群 {gid} 成员列表失败: {e}")
             return None
 
     # ------------------------------------------------------------------
@@ -181,12 +181,12 @@ class MemberFetcher:
                 )
                 return True
             except Exception as e:
-                logger.warning(f"[lurker_watcher] 直连协议端发送群 {gid} 消息失败: {e}，尝试 unified_msg_origin 兜底")
+                logger.warning(f"[qian_shui_jian_kong] 直连协议端发送群 {gid} 消息失败: {e}，尝试 unified_msg_origin 兜底")
         # 兜底：走 Context.send_message（unified_msg_origin 形如 "平台id:GroupMessage:群号"）
         try:
             return await self._ctx.send_message(
                 f"{platform_id}:GroupMessage:{gid}", chain
             )
         except Exception as e:
-            logger.error(f"[lurker_watcher] 向群 {gid} 发送消息失败: {e}")
+            logger.error(f"[qian_shui_jian_kong] 向群 {gid} 发送消息失败: {e}")
             return False

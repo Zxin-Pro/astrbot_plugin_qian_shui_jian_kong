@@ -22,13 +22,7 @@
         "description": "每日报告发送时间（24 小时制 HH:MM）：每天该时刻向各群推送潜水排行榜",
         "type": "string",
         "default": "08:00",
-        "hint": "使用机器人服务器所在时区；各群可用 /lurker set_report_time 思路修改群独立配置，或直接改这里作为全局默认"
-    },
-    "enable_llm_decision": {
-        "description": "启用 LLM 智能决策：成员达到踢人阈值时，先让大模型结合成员数据分析是否真的应该移出",
-        "type": "bool",
-        "default": true,
-        "hint": "关闭后达到阈值将按规则直接踢出（仍受白名单保护）；需要在 WebUI 中配置好可用的 LLM 提供商"
+        "hint": "使用机器人服务器所在时区；各群报告时间使用全局设置"
     },
     "enable_auto_kick": {
         "description": "启用自动踢人：关闭后仍会统计和发送预警，但不会定时自动移出成员",
@@ -41,7 +35,7 @@
         "default": true
     },
     "groups_to_monitor": {
-        "description": "要监控的群号列表：留空表示监控机器人所在的所有群",
+        "description": "要监控的群号列表：留空表示不监控任何群，必须填写目标群号",
         "type": "list",
         "default": [],
         "hint": "填写群号（字符串数字）；修改后插件保存时会自动热重载，也可用 /lurker init 立即重新拉取成员"

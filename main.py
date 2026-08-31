@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""astrbot_plugin_lurker_watcher —— 群潜水监测插件（主类）
+"""astrbot_plugin_qian_shui_jian_kong —— 群潜水监控插件（主类）
 
 功能总览
 ========
@@ -7,7 +7,7 @@
 2. 监听群消息，实时刷新成员的「最后发言时间」；
 3. 每天固定时间（默认 08:00，可在 WebUI 修改）向各群推送潜水时长排行榜；
 4. 成员潜水天数达到「阈值天数 - 预警天数」时，自动 @ 该成员发送警告；
-5. 潜水天数超过阈值后，可选调用 LLM 智能判断是否踢人，确认后自动移出群聊；
+5. 潜水天数超过阈值后直接按规则自动移出群聊；
 6. 支持白名单（不警告不踢、排行榜 ⭐ 标识）与多群独立配置；
 7. 所有参数均可在 AstrBot WebUI 的插件配置面板中可视化修改：
    点击保存后 AstrBot 会热重载本插件，新配置立即生效，无需改任何代码。
@@ -66,8 +66,8 @@ except ImportError:  # 兜底：平铺目录导入
     from notifier import Notifier
     from storage import LurkerStorage, new_member_record
 
-PLUGIN_VERSION = "v1.0.5"
-PLUGIN_NAME = "astrbot_plugin_lurker_watcher"
+PLUGIN_VERSION = "v1.0.6"
+PLUGIN_NAME = "astrbot_plugin_qian_shui_jian_kong"
 
 DAY_SECONDS = 86400
 
@@ -108,7 +108,7 @@ class PluginCronManager:
         if self._task and not self._task.done():
             return
         self._stopping.clear()
-        self._task = asyncio.create_task(self._loop(), name="lurker_cron")
+        self._task = asyncio.create_task(self._loop(), name="qian_shui_cron")
 
     async def stop(self):
         self._stopping.set()
@@ -134,13 +134,13 @@ class PluginCronManager:
                         raise
                     except Exception:
                         logger.error(
-                            f"[lurker_watcher] 定时任务 {job['name']} 执行出错：\n"
+                            f"[qian_shui_jian_kong] 定时任务 {job['name']} 执行出错：\n"
                             + traceback.format_exc()
                         )
 
 
-class LurkerWatcherPlugin(Star):
-    """潜水监测插件主类（Star 子类，AstrBot 自动识别并加载）。"""
+class QianShuiJianKongPlugin(Star):
+    """潜水监控插件主类（Star 子类，AstrBot 自动识别并加载）。"""
 
     def __init__(self, context: Context, config: AstrBotConfig = None):
         # AstrBot 检测到 _conf_schema.json 后会把 AstrBotConfig 注入 config 参数；
@@ -157,7 +157,6 @@ class LurkerWatcherPlugin(Star):
         self.cron: PluginCronManager | None = None
         self._bg_tasks: list = []          # 后台任务句柄（自动初始化等）
         self._pending_group_inits: set = set()  # 待初始化群去重
-        self._llm_warned = False           # LLM 不可用时只提示一次
         context.register_web_api(f"/{PLUGIN_NAME}/dashboard", self.page_dashboard, ["GET"], "Lurker dashboard data")
         context.register_web_api(f"/{PLUGIN_NAME}/groups/<group_id>", self.page_group, ["GET"], "Lurker group details")
         context.register_web_api(f"/{PLUGIN_NAME}/groups/<group_id>/whitelist", self.page_whitelist, ["POST"], "Update group whitelist")
@@ -196,7 +195,7 @@ class LurkerWatcherPlugin(Star):
             days = max(0.0, (now - float(rec.get("last_message_time") or now)) / DAY_SECONDS)
             members.append({"id": uid, "name": rec.get("username") or uid, "role": rec.get("role") or "member", "idle_days": round(days, 1), "whitelisted": uid in whitelist})
         members.sort(key=lambda item: item["idle_days"], reverse=True)
-        return json_response({"id": gid, "name": self.storage.get_group_name(gid) or gid, "members": members, "group_whitelist": self.storage.get_group_config(gid).get("whitelist", []), "settings": {key: self.cfg.get_group(key, gid) for key in ("threshold_days", "warning_days", "enable_llm_decision", "warn_before_kick", "max_warns_per_round", "max_kick_evals_per_round")}})
+        return json_response({"id": gid, "name": self.storage.get_group_name(gid) or gid, "members": members, "group_whitelist": self.storage.get_group_config(gid).get("whitelist", []), "settings": {key: self.cfg.get_group(key, gid) for key in ("threshold_days", "warning_days", "warn_before_kick", "max_warns_per_round", "max_kick_evals_per_round")}})
 
     async def page_whitelist(self, group_id: str):
         """Replace the group-local whitelist. Dashboard auth is enforced upstream."""
@@ -233,10 +232,10 @@ class LurkerWatcherPlugin(Star):
         self._spawn(self._auto_init_task())
 
         logger.info(
-            f"[lurker_watcher] {PLUGIN_VERSION} 已加载｜受监控群 {len(self.storage.list_groups())} 个"
+            f"[qian_shui_jian_kong] {PLUGIN_VERSION} 已加载｜受监控群 {len(self.storage.list_groups())} 个"
             f"｜阈值 {self.cfg.get_global('threshold_days')} 天"
             f"｜每日报告 {self.cfg.get_global('daily_report_time')}"
-            f"｜LLM 决策 {'开' if self.cfg.get_global('enable_llm_decision') else '关'}"
+            
         )
 
     async def terminate(self):
@@ -248,7 +247,7 @@ class LurkerWatcherPlugin(Star):
         self._bg_tasks.clear()
         if self.storage:
             await self.storage.flush()
-        logger.info("[lurker_watcher] 插件已卸载，数据已落盘")
+        logger.info("[qian_shui_jian_kong] 插件已卸载，数据已落盘")
 
     def _spawn(self, coro):
         """创建后台任务并登记，便于 terminate 时统一取消。"""
@@ -272,7 +271,7 @@ class LurkerWatcherPlugin(Star):
             try:
                 groups = await self.fetcher.get_group_list()
             except Exception:
-                logger.error("[lurker_watcher] 获取群列表异常：\n" + traceback.format_exc())
+                logger.error("[qian_shui_jian_kong] 获取群列表异常：\n" + traceback.format_exc())
                 continue
             if groups:
                 monitor = set(self.cfg.get_monitor_groups())
@@ -285,7 +284,7 @@ class LurkerWatcherPlugin(Star):
                         inited += 1
                         total_members += len(self.storage.get_members(gid))
                 logger.info(
-                    f"[lurker_watcher] 自动初始化完成（第 {attempt} 次尝试）："
+                    f"[qian_shui_jian_kong] 自动初始化完成（第 {attempt} 次尝试）："
                     f"{inited} 个群，{total_members} 名成员纳入监控"
                 )
                 return
@@ -295,8 +294,8 @@ class LurkerWatcherPlugin(Star):
                     if not self.fetcher.has_adapter()
                     else "（协议端可能尚未连接就绪，继续等待）"
                 )
-                logger.warning(f"[lurker_watcher] 暂未获取到群列表（第 {attempt}/{max_attempts} 次），{tip}")
-        logger.warning("[lurker_watcher] 自动初始化未获取到任何群，机器人收到群消息时会自动纳管，也可手动执行 /lurker init")
+                logger.warning(f"[qian_shui_jian_kong] 暂未获取到群列表（第 {attempt}/{max_attempts} 次），{tip}")
+        logger.warning("[qian_shui_jian_kong] 自动初始化未获取到任何群，机器人收到群消息时会自动纳管，也可手动执行 /lurker init")
 
     async def _init_group(self, gid: str, info: dict) -> bool:
         """拉取单个群的全量成员并写入存储（保留已有成员的活跃数据）。"""
@@ -342,7 +341,7 @@ class LurkerWatcherPlugin(Star):
         self.storage.set_group_meta(gid, "initialized_at", initialized_at)
         self.storage.set_group_meta(gid, "member_count", len(mapping))
         await self.storage.flush()
-        logger.info(f"[lurker_watcher] 群 {gid} 初始化完成：{len(mapping)} 名成员")
+        logger.info(f"[qian_shui_jian_kong] 群 {gid} 初始化完成：{len(mapping)} 名成员")
         return True
 
     # ==================================================================
@@ -377,7 +376,7 @@ class LurkerWatcherPlugin(Star):
                 )
             self.storage.touch_member(gid, uid, str(username), time.time())
         except Exception as e:
-            logger.error(f"[lurker_watcher] 处理群消息出错: {e}\n" + traceback.format_exc())
+            logger.error(f"[qian_shui_jian_kong] 处理群消息出错: {e}\n" + traceback.format_exc())
 
     def _maybe_adopt_group(self, gid: str):
         """机器人进入新群后收到首条消息时，自动把该群纳入监控（去重 + 后台执行）。"""
@@ -395,7 +394,7 @@ class LurkerWatcherPlugin(Star):
                 if info:
                     await self._init_group(gid, info)
             except Exception:
-                logger.error(f"[lurker_watcher] 自动纳管群 {gid} 失败：\n" + traceback.format_exc())
+                logger.error(f"[qian_shui_jian_kong] 自动纳管群 {gid} 失败：\n" + traceback.format_exc())
             finally:
                 self._pending_group_inits.discard(gid)
 
@@ -417,7 +416,7 @@ class LurkerWatcherPlugin(Star):
             try:
                 await self._check_group(gid, info)
             except Exception:
-                logger.error(f"[lurker_watcher] 检查群 {gid} 时出错：\n" + traceback.format_exc())
+                logger.error(f"[qian_shui_jian_kong] 检查群 {gid} 时出错：\n" + traceback.format_exc())
 
     async def _check_group(self, gid: str, info: dict):
         """单个群的潜水状态检查：先预警、后踢人评估。"""
@@ -442,7 +441,7 @@ class LurkerWatcherPlugin(Star):
         initialized_at = meta.get("initialized_at") or 0
         if not initialized_at:
             self.storage.set_group_meta(gid, "initialized_at", now)
-            logger.warning(f"[lurker_watcher] 群 {gid} 缺少纳管时间，已补写并跳过本轮踢人评估")
+            logger.warning(f"[qian_shui_jian_kong] 群 {gid} 缺少纳管时间，已补写并跳过本轮踢人评估")
             initialized_at = now
 
         warn_candidates = []   # 预警区成员
@@ -451,7 +450,7 @@ class LurkerWatcherPlugin(Star):
             if uid in whitelist:
                 continue  # 白名单不警告不踢
             if str(rec.get("role") or "").lower() in ("owner", "admin"):
-                continue  # 群主/管理员：OneBot 无法踢出，不浪费警告与 LLM 评估
+                continue  # 群主/管理员：OneBot 无法踢出，不进行评估
             try:
                 days = (now - float(rec.get("last_message_time") or now)) / DAY_SECONDS
             except (TypeError, ValueError):
@@ -482,13 +481,13 @@ class LurkerWatcherPlugin(Star):
             ok = await self.notifier.send_group_chain(info.get("platform_id", ""), gid, chain)
             if ok:
                 self.storage.set_member_fields(gid, uid, warned_at=now)
-                logger.info(f"[lurker_watcher] 群 {gid} 已 @ 警告 {uid}（潜水 {days:.1f} 天）")
+                logger.info(f"[qian_shui_jian_kong] 群 {gid} 已 @ 警告 {uid}（潜水 {days:.1f} 天）")
             warned += 1
 
         # ---- 2. 踢人评估：初始化保护期后才开始，避免首轮误杀 ----
         if now - initialized_at < INIT_GRACE_SECONDS:
             if kick_candidates:
-                logger.debug(f"[lurker_watcher] 群 {gid} 处于初始化保护期，本轮跳过 {len(kick_candidates)} 名候选")
+                logger.debug(f"[qian_shui_jian_kong] 群 {gid} 处于初始化保护期，本轮跳过 {len(kick_candidates)} 名候选")
             return
 
         if not bool(self.cfg.get_group("enable_auto_kick", gid)):
@@ -509,96 +508,9 @@ class LurkerWatcherPlugin(Star):
             evaluated += 1
 
     async def _evaluate_and_maybe_kick(self, gid, info, uid, rec, days, threshold):
-        """达到阈值的成员：可选 LLM 智能决策 -> 确认后执行移出。"""
-        enable_llm = bool(self.cfg.get_group("enable_llm_decision", gid))
-        decision_desc = "规则判定"
+        """达到红线后直接执行移出。"""
         reason = f"已连续 {days:.0f} 天未发言，达到 {threshold} 天阈值"
-
-        if enable_llm:
-            decision = await self._llm_decide(gid, uid, rec, days, threshold)
-            if decision is None:
-                # LLM 不可用/解析失败：安全起见本轮不踢，次日重新评估
-                logger.warning(f"[lurker_watcher] 群 {gid} 成员 {uid} 的 LLM 决策失败，本轮跳过")
-                return
-            kick, reason = decision
-            decision_desc = "LLM 智能决策"
-            if not kick:
-                # LLM 决定保留：不打扰群里，仅记录日志
-                logger.info(f"[lurker_watcher] LLM 决定保留群 {gid} 成员 {uid}：{reason}")
-                return
-
-        # 执行移出（warn_before_kick 决定是否先发最终通牒）
-        await self._execute_kick(gid, info, uid, rec, days, reason, decision_desc)
-
-    async def _llm_decide(self, gid, uid, rec, days, threshold):
-        """调用 LLM 判断是否应踢出某成员。
-
-        返回 (是否踢出, 理由)；LLM 不可用或结果无法解析时返回 None。
-        """
-        try:
-            provider = self.context.get_using_provider()
-        except Exception:
-            provider = None
-        if provider is None:
-            if not self._llm_warned:
-                self._llm_warned = True
-                logger.warning(
-                    "[lurker_watcher] 未配置可用的 LLM 提供商，LLM 智能决策不可用；"
-                    "请在 WebUI 配置提供商，或关闭 enable_llm_decision 改为规则直接踢出"
-                )
-            return None
-
-        first_seen = rec.get("first_seen") or 0
-        span_days = max(0.0, (time.time() - first_seen) / DAY_SECONDS)
-        username = rec.get("username") or uid
-        prompt = (
-            "请根据以下数据，判断是否应将该群成员移出群聊：\n"
-            f"- 群号：{gid}\n"
-            f"- 成员：{username}（QQ {uid}）\n"
-            f"- 纳管时长：{span_days:.1f} 天\n"
-            f"- 最后发言距今：{days:.1f} 天\n"
-            f"- 群潜水阈值：{threshold} 天\n"
-            "参考原则：数据零散、偶尔活跃的新人可以宽容；长期为零且曾被警告仍不改的再考虑移出；"
-            "存在疑问时倾向保留。"
-        )
-        system_prompt = (
-            "你是 QQ 群管理助手，负责潜水成员的移出裁决。"
-            '你必须且只能输出一个 JSON 对象，格式：{"action": "kick" 或 "keep", "reason": "不超过40字的理由"}。'
-            "不要输出任何其他内容。"
-        )
-        try:
-            resp = await provider.text_chat(prompt=prompt, system_prompt=system_prompt)
-        except Exception as e:
-            logger.error(f"[lurker_watcher] LLM 请求失败: {e}")
-            return None
-
-        text = str(getattr(resp, "completion_text", "") or "")
-        parsed = self._parse_decision_json(text)
-        if parsed is None:
-            logger.warning(f"[lurker_watcher] LLM 返回内容无法解析为 JSON：{text[:200]}")
-            return None
-        action = str(parsed.get("action", "")).strip().lower()
-        reason = str(parsed.get("reason", "")).strip() or reason
-        if action == "kick":
-            return True, reason
-        if action == "keep":
-            return False, reason
-        logger.warning(f"[lurker_watcher] LLM 返回了未知 action：{action}")
-        return None
-
-    @staticmethod
-    def _parse_decision_json(text: str):
-        """从 LLM 回复中鲁棒地提取决策 JSON（容忍 ```json 包裹、前后缀文本等）。"""
-        if not text:
-            return None
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if not match:
-            return None
-        try:
-            data = json.loads(match.group(0))
-            return data if isinstance(data, dict) else None
-        except json.JSONDecodeError:
-            return None
+        await self._execute_kick(gid, info, uid, rec, days, reason, "规则自动移出")
 
     async def _execute_kick(self, gid, info, uid, rec, days, reason, decision_desc):
         """执行移出群聊：可选最终警告 -> 踢人 -> 群通知 -> 清理数据。"""
@@ -614,7 +526,7 @@ class LurkerWatcherPlugin(Star):
                 await self.notifier.send_group_chain(platform_id, gid, chain)
                 await asyncio.sleep(1.5)  # 略作间隔，保证两条消息顺序到达
             except Exception:
-                logger.error("[lurker_watcher] 发送最终警告失败：\n" + traceback.format_exc())
+                logger.error("[qian_shui_jian_kong] 发送最终警告失败：\n" + traceback.format_exc())
 
         # 2. 调用平台接口移出群聊
         ok, err = await self.fetcher.kick_group_member(platform_id, gid, uid)
@@ -625,17 +537,17 @@ class LurkerWatcherPlugin(Star):
             await self.storage.flush()
             notice = self.notifier.build_kick_notice_chain(uid, username, days, reason, decision_desc)
             await self.notifier.send_group_chain(platform_id, gid, notice)
-            logger.info(f"[lurker_watcher] 已将 {username}({uid}) 移出群 {gid}｜{decision_desc}｜{reason}")
+            logger.info(f"[qian_shui_jian_kong] 已将 {username}({uid}) 移出群 {gid}｜{decision_desc}｜{reason}")
             return True
 
         # 3. 失败处理：通常是机器人没有群管理员权限
         fails = int(rec.get("kick_fails") or 0) + 1
         self.storage.set_member_fields(gid, uid, kick_fails=fails)
-        logger.error(f"[lurker_watcher] 移出群 {gid} 成员 {uid} 失败（第 {fails} 次）：{err}")
+        logger.error(f"[qian_shui_jian_kong] 移出群 {gid} 成员 {uid} 失败（第 {fails} 次）：{err}")
         if fails >= KICK_MAX_FAILS:
             self.storage.remove_member(gid, uid)
             logger.warning(
-                f"[lurker_watcher] 成员 {uid} 连续 {fails} 次移出失败，已停止跟踪；"
+                f"[qian_shui_jian_kong] 成员 {uid} 连续 {fails} 次移出失败，已停止跟踪；"
                 f"请确认机器人在群 {gid} 中拥有管理员权限"
             )
         return False
@@ -678,13 +590,13 @@ class LurkerWatcherPlugin(Star):
             if ok:
                 self.storage.set_group_meta(gid, "last_report_date", today)
             else:
-                logger.error(f"[lurker_watcher] 群 {gid} 日报发送失败，30 分钟后自动重试")
+                logger.error(f"[qian_shui_jian_kong] 群 {gid} 日报发送失败，30 分钟后自动重试")
 
     async def _send_report(self, gid, info: dict, title: str) -> bool:
         """构建并发送某群的监测报告。"""
         members = self.storage.get_members(gid)
         if not members:
-            logger.info(f"[lurker_watcher] 群 {gid} 暂无成员数据，跳过报告")
+            logger.info(f"[qian_shui_jian_kong] 群 {gid} 暂无成员数据，跳过报告")
             return False
         text = self.notifier.build_report(
             title=title,
@@ -697,7 +609,7 @@ class LurkerWatcherPlugin(Star):
         )
         ok = await self.notifier.send_group_text(info.get("platform_id", ""), gid, text)
         if not ok:
-            logger.error(f"[lurker_watcher] 群 {gid} 报告发送失败")
+            logger.error(f"[qian_shui_jian_kong] 群 {gid} 报告发送失败")
         return ok
 
     # ==================================================================
@@ -1004,54 +916,3 @@ class LurkerWatcherPlugin(Star):
                 total += len(self.storage.get_members(g))
         yield event.plain_result(f"✅ 已重新初始化 {done} 个群，共 {total} 名成员纳入监控")
 
-    # ==================================================================
-    # LLM 工具：decide_kick
-    # ==================================================================
-    @filter.llm_tool(name="decide_kick")
-    async def decide_kick(
-        self,
-        event: AstrMessageEvent,
-        group_id: str,
-        user_id: str,
-        action: str,
-        reason: str,
-    ):
-        """潜水成员踢人裁决工具。当管理员在对话中要求评估/处置某位潜水成员时调用，执行最终裁决。
-
-        Args:
-            group_id(string): 目标群号（纯数字）
-            user_id(string): 目标成员 QQ 号（纯数字）
-            action(string): 裁决结果，只能填 "kick"（移出群聊）或 "keep"（保留）
-            reason(string): 简短的裁决理由，会被公示到群里
-        """
-        if self.storage is None or self.cfg is None:
-            return "插件尚未初始化完成，请稍后再试。"
-        # 安全兜底：会话内触发的裁决必须来自 AstrBot 管理员，防止普通成员借 LLM 踢人
-        if not event.is_admin():
-            return "权限不足：只有 AstrBot 管理员可以执行踢人裁决。"
-        gid = str(group_id or "").strip()
-        uid = str(user_id or "").strip()
-        act = str(action or "").strip().lower()
-        why = str(reason or "").strip() or "管理员通过 LLM 裁决移出"
-        if not gid.isdigit() or not uid.isdigit():
-            return "参数错误：group_id 与 user_id 必须是纯数字群号/QQ号。"
-        if act not in ("kick", "keep"):
-            return '参数错误：action 只能是 "kick" 或 "keep"。'
-        if not self.storage.has_group(gid):
-            return f"群 {gid} 未被本插件监控，无法执行裁决。"
-        rec = self.storage.get_member(gid, uid)
-        if rec is None:
-            return f"群 {gid} 中未找到成员 {uid} 的监控记录。"
-
-        if act == "keep":
-            self.storage.set_member_fields(gid, uid, evaluated_at=time.time())
-            await self.storage.flush()
-            logger.info(f"[lurker_watcher] 管理员 LLM 裁决保留群 {gid} 成员 {uid}：{why}")
-            return f"已保留成员 {uid}，理由：{why}"
-
-        days = max(0.0, (time.time() - float(rec.get("last_message_time") or time.time())) / DAY_SECONDS)
-        info = self.storage.list_groups().get(gid, {})
-        ok = await self._execute_kick(gid, info, uid, rec, days, why, "LLM 智能裁决")
-        if ok:
-            return f"已将 {rec.get('username', '')}({uid}) 移出群 {gid}，理由：{why}"
-        return f"移出失败：请确认机器人在群 {gid} 中具有管理员权限，详见日志。"

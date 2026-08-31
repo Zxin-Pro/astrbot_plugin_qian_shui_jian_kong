@@ -72,7 +72,7 @@ def new_member_record(
 
 
 class LurkerStorage:
-    """潜水监测插件的存储门面：内存缓存 + PluginKVStoreMixin 持久化。"""
+    """潜水监控插件的存储门面：内存缓存 + PluginKVStoreMixin 持久化。"""
 
     def __init__(self, star):
         # star：插件主类实例（Star 子类），借其继承的 PluginKVStoreMixin 读写 KV。
@@ -101,7 +101,7 @@ class LurkerStorage:
         self._dirty.clear()
         self._loaded = True
         total = sum(len(m) for m in self._members.values())
-        logger.info(f"[lurker_watcher] 存储载入完成：{len(self._index)} 个群，{total} 名成员")
+        logger.info(f"[qian_shui_jian_kong] 存储载入完成：{len(self._index)} 个群，{total} 名成员")
 
     async def flush(self):
         """把所有脏 key 批量写回 KV 存储。
@@ -130,14 +130,14 @@ class LurkerStorage:
                     continue
                 pending.append((key, copy.deepcopy(value)))
             except Exception as e:
-                logger.error(f"[lurker_watcher] 快照失败 key={key}: {e}")
+                logger.error(f"[qian_shui_jian_kong] 快照失败 key={key}: {e}")
         for key, value in pending:
             try:
                 await self._star.put_kv_data(key, value)
                 self._dirty.discard(key)
             except Exception as e:  # 单 key 失败不影响其他 key
-                logger.error(f"[lurker_watcher] 落盘失败 key={key}: {e}")
-        logger.debug("[lurker_watcher] 存储已落盘")
+                logger.error(f"[qian_shui_jian_kong] 落盘失败 key={key}: {e}")
+        logger.debug("[qian_shui_jian_kong] 存储已落盘")
 
     # ------------------------------------------------------------------
     # 群索引
@@ -178,7 +178,7 @@ class LurkerStorage:
             try:
                 await self._star.delete_kv_data(key)
             except Exception as e:
-                logger.warning(f"[lurker_watcher] 删除 KV 失败 key={key}: {e}")
+                logger.warning(f"[qian_shui_jian_kong] 删除 KV 失败 key={key}: {e}")
         self._dirty.add(K_INDEX)
 
     # ------------------------------------------------------------------
