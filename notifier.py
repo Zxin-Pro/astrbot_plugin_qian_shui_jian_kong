@@ -17,9 +17,9 @@ from datetime import datetime
 from astrbot.api.event import MessageChain
 
 try:
-    from .config import DEFAULT_WARN_TEMPLATE
+    from .config import DEFAULT_WARN_TEMPLATE, DEFAULT_KILL_WARN_TEMPLATE
 except ImportError:  # 兜底：平铺目录导入
-    from config import DEFAULT_WARN_TEMPLATE
+    from config import DEFAULT_WARN_TEMPLATE, DEFAULT_KILL_WARN_TEMPLATE
 
 logger = logging.getLogger("astrbot")
 
@@ -140,7 +140,7 @@ class Notifier:
             lines.append(f"{medal} {name}（{uid}）· 潜水 {fmt_days(d)}{mark}{star}")
             shown += 1
         if shown == 0:
-            lines.append("（暂无成员数据，请先用 /lurker init 初始化）")
+            lines.append("（暂无成员数据，请先用 /潜水 init 初始化）")
 
         if total > shown:
             lines.append(f"……其余 {total - shown} 人未展示")
@@ -192,6 +192,18 @@ class Notifier:
         )
         # 注意 v4 MessageChain.at() 签名：at(name, qq)
         return MessageChain().at(username or "", uid).message(f" {text}")
+
+    def build_kill_warning_chain(self, candidates, threshold: int, template: str = "", group_id="") -> MessageChain:
+        """批量 @ 已达到斩杀线但尚未移出的成员，文案支持模板。"""
+        names = "、".join(str(rec.get("username") or uid) for _, uid, rec in candidates)
+        text = render_template(
+            template or DEFAULT_KILL_WARN_TEMPLATE,
+            {"count": len(candidates), "threshold": threshold, "names": names, "group": str(group_id or "")},
+        )
+        chain = MessageChain().message(text)
+        for _, uid, rec in candidates:
+            chain.at(rec.get("username") or "", uid)
+        return chain
 
     def build_final_warning_chain(self, uid, username: str, days: float, threshold: int, reason: str) -> MessageChain:
         """踢人前的最终警告消息链。"""

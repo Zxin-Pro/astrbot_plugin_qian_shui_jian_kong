@@ -33,13 +33,13 @@
 
 指令一览（/潜水 可查看自动生成的指令树）
 ==========================================
-    /lurker list [群号]                          查看潜水排行榜
-    /lurker set_threshold <天数> [群号]          设置阈值（管理员）
-    /lurker set_warning <天数> [群号]            设置预警天数（管理员）
-    /lurker whitelist add/remove <@用户|QQ号>    群级白名单管理（管理员）
-    /lurker whitelist show                       查看本群白名单
-    /lurker report [群号]                        手动发送监测报告
-    /lurker init [群号]                          重新初始化成员列表（管理员）
+    /潜水 list [群号]                          查看潜水排行榜
+    /潜水 set_threshold <天数> [群号]          设置阈值（管理员）
+    /潜水 set_warning <天数> [群号]            设置预警天数（管理员）
+    /潜水 whitelist add/remove <@用户|QQ号>    群级白名单管理（管理员）
+    /潜水 whitelist show                       查看本群白名单
+    /潜水 report [群号]                        手动发送监测报告
+    /潜水 init [群号]                          重新初始化成员列表（管理员）
 """
 
 import asyncio
@@ -66,7 +66,7 @@ except ImportError:  # 兜底：平铺目录导入
     from notifier import Notifier
     from storage import LurkerStorage, new_member_record
 
-PLUGIN_VERSION = "v1.0.7"
+PLUGIN_VERSION = "v1.0.8"
 PLUGIN_NAME = "astrbot_plugin_qian_shui_jian_kong"
 
 DAY_SECONDS = 86400
@@ -638,26 +638,26 @@ class QianShuiJianKongPlugin(Star):
         arg = str(arg or "").strip()
         if arg:
             if not arg.isdigit():
-                return "", "❌ 群号必须是纯数字，例如：/lurker list 123456789"
+                return "", "❌ 群号必须是纯数字，例如：/潜水 list 123456789"
             current = str(event.get_group_id() or "").strip()
             if not event.is_admin() and arg != current:
                 return "", "🚫 查询其他群需要 AstrBot 管理员权限"
             if not self.storage.has_group(arg):
-                return "", f"❌ 群 {arg} 尚未被监控或未初始化，请先执行 /lurker init {arg}"
+                return "", f"❌ 群 {arg} 尚未被监控或未初始化，请先执行 /潜水 init {arg}"
             return arg, ""
         gid = str(event.get_group_id() or "").strip()
         if gid:
             if not self.storage.has_group(gid):
-                return gid, f"❌ 本群尚未初始化，请管理员执行 /lurker init"
+                return gid, f"❌ 本群尚未初始化，请管理员执行 /潜水 init"
             return gid, ""
-        return "", "❌ 请携带群号使用，例如：/lurker list 123456789"
+        return "", "❌ 请携带群号使用，例如：/潜水 list 123456789"
 
     @staticmethod
     def _extract_target_user_id(event: AstrMessageEvent, target: str) -> str:
         """从指令参数或消息的 At 组件中提取目标用户 QQ 号。
 
-        支持三种写法：/lurker whitelist add 123456、
-        /lurker whitelist add @某人（At 组件）、/lurker whitelist add @123456。
+        支持三种写法：/潜水 whitelist add 123456、
+        /潜水 whitelist add @某人（At 组件）、/潜水 whitelist add @123456。
         """
         target = str(target or "").strip()
         if target.isdigit():
@@ -676,13 +676,30 @@ class QianShuiJianKongPlugin(Star):
         return ""
 
     # ==================================================================
-    # 指令注册（指令组：/lurker）
+    # 指令注册（指令组：/潜水）
     # ==================================================================
     @filter.command_group("潜水")
     async def lurker(self, event: AstrMessageEvent):
         """潜水监测指令组（单独发送 /潜水 可查看全部子指令）"""
-        # 注意：指令组的根函数不会被执行 —— 用户只输入 /lurker 时，
+        # 注意：指令组的根函数不会被执行 —— 用户只输入 /潜水 时，
         # AstrBot 会自动抛出带指令树的参数不足提示（见 CommandGroupFilter）。
+
+    @lurker.command("帮助")
+    async def lurker_help(self, event: AstrMessageEvent):
+        """显示潜水监控指令帮助。"""
+        event.should_call_llm(False)
+        yield event.plain_result(
+            "📖 潜水监控指令：\n"
+            "/潜水 查看 [群号] —— 查看潜水排行\n"
+            "/潜水 预警 [群号] —— @ 预警线成员\n"
+            "/潜水 斩杀预警 [群号] —— 用自定义文案 @ 斩杀线成员\n"
+            "/潜水 踢人 [群号] —— 批量踢出已到斩杀线成员\n"
+            "/潜水 设置阈值 <天数> [群号]\n"
+            "/潜水 设置预警 <天数> [群号]\n"
+            "/潜水 白名单 添加/移除/查看 <QQ号>\n"
+            "/潜水 报告 [群号] —— 发送监测报告\n"
+            "/潜水 初始化 [群号] —— 重新拉取成员"
+        )
 
     @lurker.command("查看")
     async def lurker_list(self, event: AstrMessageEvent, group_id: str = ""):
@@ -695,7 +712,7 @@ class QianShuiJianKongPlugin(Star):
         info = self.storage.list_groups().get(gid, {})
         members = self.storage.get_members(gid)
         if not members:
-            yield event.plain_result(f"❌ 群 {gid} 暂无成员数据，请先初始化（/lurker init）")
+            yield event.plain_result(f"❌ 群 {gid} 暂无成员数据，请先初始化（/潜水 init）")
             return
         text = self.notifier.build_report(
             title="潜水排行快照",
@@ -748,6 +765,89 @@ class QianShuiJianKongPlugin(Star):
         await self.storage.flush()
         yield event.plain_result(f"✅ 已立即 @ 群 {gid} 中 {sent} 名即将到红线的成员")
 
+    @lurker.command("斩杀预警")
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    async def lurker_kill_warning(self, event: AstrMessageEvent, group_id: str = ""):
+        """立即 @ 已达到斩杀线但尚未移出的成员。"""
+        event.should_call_llm(False)
+        if not event.is_admin():
+            yield event.plain_result("🚫 该指令需要 AstrBot 管理员权限")
+            return
+        gid, err = self._resolve_target_group(event, group_id)
+        if err:
+            yield event.plain_result(err)
+            return
+        info = self.storage.list_groups().get(gid, {})
+        now = time.time()
+        threshold = max(1, int(self.cfg.get_group("threshold_days", gid)))
+        whitelist = self.cfg.get_whitelist(gid)
+        candidates = []
+        for uid, rec in self.storage.get_members(gid).items():
+            if uid in whitelist or str(rec.get("role") or "").lower() in ("owner", "admin"):
+                continue
+            try:
+                days = max(0.0, (now - float(rec.get("last_message_time") or now)) / DAY_SECONDS)
+            except (TypeError, ValueError):
+                continue
+            if days >= threshold:
+                candidates.append((days, uid, rec))
+        if not candidates:
+            yield event.plain_result(f"ℹ️ 群 {gid} 当前没有已到斩杀线但未移出的成员")
+            return
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        chain = self.notifier.build_kill_warning_chain(
+            candidates, threshold,
+            template=self.cfg.get_group("kill_warn_template", gid),
+            group_id=gid,
+        )
+        ok = await self.notifier.send_group_chain(info.get("platform_id", ""), gid, chain)
+        yield event.plain_result(
+            f"{'✅' if ok else '❌'} 已{' @ ' if ok else '尝试提醒 '}群 {gid} 中 {len(candidates)} 名斩杀线成员"
+        )
+
+    @lurker.command("踢人")
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    async def lurker_kick_overdue(self, event: AstrMessageEvent, group_id: str = ""):
+        """批量踢出当前群所有已达到斩杀线的成员。"""
+        event.should_call_llm(False)
+        if not event.is_admin():
+            yield event.plain_result("🚫 该指令需要 AstrBot 管理员权限")
+            return
+        gid, err = self._resolve_target_group(event, group_id)
+        if err:
+            yield event.plain_result(err)
+            return
+        info = self.storage.list_groups().get(gid, {})
+        now = time.time()
+        threshold = max(1, int(self.cfg.get_group("threshold_days", gid)))
+        whitelist = self.cfg.get_whitelist(gid)
+        candidates = []
+        for uid, rec in self.storage.get_members(gid).items():
+            if uid in whitelist or str(rec.get("role") or "").lower() in ("owner", "admin"):
+                continue
+            try:
+                days = max(0.0, (now - float(rec.get("last_message_time") or now)) / DAY_SECONDS)
+            except (TypeError, ValueError):
+                continue
+            if days >= threshold:
+                candidates.append((days, uid, rec))
+        if not candidates:
+            yield event.plain_result(f"ℹ️ 群 {gid} 当前没有已到斩杀线的成员")
+            return
+        kicked = 0
+        failed = 0
+        for days, uid, rec in sorted(candidates, key=lambda item: item[0], reverse=True):
+            ok = await self._execute_kick(
+                gid, info, uid, rec, days,
+                f"已连续 {days:.0f} 天未发言，达到 {threshold} 天斩杀线",
+                "管理员手动批量移出",
+            )
+            if ok:
+                kicked += 1
+            else:
+                failed += 1
+        yield event.plain_result(f"✅ 群 {gid} 批量处理完成：踢出 {kicked} 人，失败 {failed} 人")
+
     @lurker.command("设置阈值")
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def lurker_set_threshold(self, event: AstrMessageEvent, days: str = "", group_id: str = ""):
@@ -759,7 +859,7 @@ class QianShuiJianKongPlugin(Star):
             return
         days = days.strip()
         if not days.isdigit() or int(days) <= 0 or int(days) > 3650:
-            yield event.plain_result("❌ 用法：/lurker set_threshold <天数>（1～3650 的整数）")
+            yield event.plain_result("❌ 用法：/潜水 set_threshold <天数>（1～3650 的整数）")
             return
         gid, err = self._resolve_target_group(event, group_id)
         if err:
@@ -788,7 +888,7 @@ class QianShuiJianKongPlugin(Star):
             return
         days = days.strip()
         if not days.isdigit() or int(days) > 365:
-            yield event.plain_result("❌ 用法：/lurker set_warning <天数>（0～365 的整数）")
+            yield event.plain_result("❌ 用法：/潜水 set_warning <天数>（0～365 的整数）")
             return
         gid, err = self._resolve_target_group(event, group_id)
         if err:
@@ -843,7 +943,7 @@ class QianShuiJianKongPlugin(Star):
         if action in ("add", "remove", "del", "rm"):
             uid = self._extract_target_user_id(event, target)
             if not uid:
-                yield event.plain_result("❌ 用法：/lurker whitelist add|remove <@用户 或 QQ号>")
+                yield event.plain_result("❌ 用法：/潜水 whitelist add|remove <@用户 或 QQ号>")
                 return
             if action == "add":
                 if uid in wl:
@@ -862,8 +962,8 @@ class QianShuiJianKongPlugin(Star):
             return
 
         yield event.plain_result(
-            "❌ 用法：/lurker whitelist add|remove <@用户 或 QQ号>\n"
-            "        /lurker whitelist show"
+            "❌ 用法：/潜水 whitelist add|remove <@用户 或 QQ号>\n"
+            "        /潜水 whitelist show"
         )
 
     @lurker.command("报告")
