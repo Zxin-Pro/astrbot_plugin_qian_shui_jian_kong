@@ -21,7 +21,7 @@ DEFAULT_WARN_TEMPLATE = (
 
 DEFAULT_KILL_WARN_TEMPLATE = (
     "🚨 斩杀预警：以下 {count} 名成员已达到 {threshold} 天斩杀线，"
-    "请及时发言，否则将被移出群聊：{names}"
+    "请及时发言，否则将被移出群聊。"
 )
 
 # 与 _conf_schema.json 保持一致的兜底默认值。

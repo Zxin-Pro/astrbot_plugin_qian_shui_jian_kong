@@ -195,14 +195,15 @@ class Notifier:
 
     def build_kill_warning_chain(self, candidates, threshold: int, template: str = "", group_id="") -> MessageChain:
         """批量 @ 已达到斩杀线但尚未移出的成员，文案支持模板。"""
-        names = "、".join(str(rec.get("username") or uid) for _, uid, rec in candidates)
+        # 文案只负责提示，成员名单全部使用真正的 At 组件，避免出现假艾特。
         text = render_template(
             template or DEFAULT_KILL_WARN_TEMPLATE,
-            {"count": len(candidates), "threshold": threshold, "names": names, "group": str(group_id or "")},
+            {"count": len(candidates), "threshold": threshold, "names": "", "group": str(group_id or "")},
         )
         chain = MessageChain().message(text)
         for _, uid, rec in candidates:
-            chain.at(rec.get("username") or "", uid)
+            # 每名成员单独一行，At 组件由平台渲染为真实艾特。
+            chain.message("\n").at(rec.get("username") or "", uid)
         return chain
 
     def build_final_warning_chain(self, uid, username: str, days: float, threshold: int, reason: str) -> MessageChain:

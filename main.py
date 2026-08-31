@@ -66,7 +66,7 @@ except ImportError:  # 兜底：平铺目录导入
     from notifier import Notifier
     from storage import LurkerStorage, new_member_record
 
-PLUGIN_VERSION = "v1.0.8"
+PLUGIN_VERSION = "v1.0.9"
 PLUGIN_NAME = "astrbot_plugin_qian_shui_jian_kong"
 
 DAY_SECONDS = 86400

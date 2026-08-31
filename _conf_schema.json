@@ -62,9 +62,9 @@
         "default": 0
     },
     "kill_warn_template": {
-        "description": "斩杀预警文案模板：支持 {count} 人数、{threshold} 斩杀线天数、{names} 成员昵称、{group} 群号；成员 @ 会自动添加，支持多行",
+        "description": "斩杀预警文案模板：支持 {count} 人数、{threshold} 斩杀线天数、{group} 群号；成员会以真实 @ 组件逐行自动添加，支持多行",
         "type": "text",
-        "default": "🚨 斩杀预警：以下 {count} 名成员已达到 {threshold} 天斩杀线，请及时发言，否则将被移出群聊：{names}",
+        "default": "🚨 斩杀预警：以下 {count} 名成员已达到 {threshold} 天斩杀线，请及时发言，否则将被移出群聊。",
         "hint": "只在执行 /潜水 斩杀预警 时使用；未知占位符会原样保留"
     },
     "warn_template": {
