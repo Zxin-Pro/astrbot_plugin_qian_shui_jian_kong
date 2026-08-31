@@ -678,6 +678,7 @@ class QianShuiJianKongPlugin(Star):
     @lurker.command("查看")
     async def lurker_list(self, event: AstrMessageEvent, group_id: str = ""):
         """查看群潜水排行榜（可附带群号跨群查询，跨群需管理员）"""
+        event.should_call_llm(False)
         gid, err = self._resolve_target_group(event, group_id)
         if err:
             yield event.plain_result(err)
@@ -702,6 +703,7 @@ class QianShuiJianKongPlugin(Star):
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def lurker_warn_now(self, event: AstrMessageEvent, group_id: str = ""):
         """立即 @ 当前群已到预警线但尚未达到踢人红线的成员。"""
+        event.should_call_llm(False)
         if not event.is_admin():
             yield event.plain_result("🚫 该指令需要 AstrBot 管理员权限")
             return
@@ -741,6 +743,7 @@ class QianShuiJianKongPlugin(Star):
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def lurker_set_threshold(self, event: AstrMessageEvent, days: str = "", group_id: str = ""):
         """设置潜水天数阈值（本群生效；可附带群号为指定群设置）"""
+        event.should_call_llm(False)
         # 纵深防御：除框架级 permission_type 过滤外，handler 内部再校验一次
         if not event.is_admin():
             yield event.plain_result("🚫 该指令需要 AstrBot 管理员权限")
@@ -770,6 +773,7 @@ class QianShuiJianKongPlugin(Star):
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def lurker_set_warning(self, event: AstrMessageEvent, days: str = "", group_id: str = ""):
         """设置提前预警天数（本群生效；可附带群号为指定群设置）"""
+        event.should_call_llm(False)
         if not event.is_admin():
             yield event.plain_result("🚫 该指令需要 AstrBot 管理员权限")
             return
@@ -800,6 +804,7 @@ class QianShuiJianKongPlugin(Star):
         self, event: AstrMessageEvent, action: str = "", target: str = ""
     ):
         """群级白名单管理：add/remove <@用户|QQ号> 或 show 查看当前名单"""
+        event.should_call_llm(False)
         if not event.is_admin():
             yield event.plain_result("🚫 该指令需要 AstrBot 管理员权限")
             return
@@ -855,6 +860,7 @@ class QianShuiJianKongPlugin(Star):
     @lurker.command("报告")
     async def lurker_report(self, event: AstrMessageEvent, group_id: str = ""):
         """手动发送当前群的潜水监测报告（可附带群号）"""
+        event.should_call_llm(False)
         gid, err = self._resolve_target_group(event, group_id)
         if err:
             yield event.plain_result(err)
@@ -871,6 +877,7 @@ class QianShuiJianKongPlugin(Star):
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def lurker_init(self, event: AstrMessageEvent, group_id: str = ""):
         """重新拉取群成员并初始化（附带群号则只初始化该群，否则刷新所有受监控群）"""
+        event.should_call_llm(False)
         if not event.is_admin():
             yield event.plain_result("🚫 该指令需要 AstrBot 管理员权限")
             return
