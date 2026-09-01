@@ -542,15 +542,18 @@ class QianShuiJianKongPlugin(Star):
         reason = f"已连续 {days:.0f} 天未发言，达到 {threshold} 天阈值"
         await self._execute_kick(gid, info, uid, rec, days, reason, "规则自动移出")
 
-    async def _execute_kick(self, gid, info, uid, rec, days, reason, decision_desc):
-        """执行移出群聊：可选最终警告 -> 踢人 -> 群通知 -> 清理数据。"""
+    async def _execute_kick(self, gid, info, uid, rec, days, reason, decision_desc, silent=False):
+        """执行移出群聊：可选最终警告 -> 踢人 -> 群通知 -> 清理数据。
+
+        silent=True 时不发送逐人最终警告与移出通知（批量斩杀场景由汇总/总结消息代替）。
+        """
         gid = str(gid)
         platform_id = info.get("platform_id", "")
         username = rec.get("username", "")
         threshold = int(self.cfg.get_group("threshold_days", gid))
 
-        # 1. 最终警告（可选）
-        if bool(self.cfg.get_group("warn_before_kick", gid)):
+        # 1. 最终警告（可选；批量斩杀时由汇总消息代替，不再逐人打扰）
+        if not silent and bool(self.cfg.get_group("warn_before_kick", gid)):
             try:
                 chain = self.notifier.build_final_warning_chain(uid, username, days, threshold, reason)
                 await self.notifier.send_group_chain(platform_id, gid, chain)
@@ -565,8 +568,9 @@ class QianShuiJianKongPlugin(Star):
             meta = self.storage.get_group_meta(gid)
             self.storage.set_group_meta(gid, "member_count", max(0, int(meta.get("member_count") or 1) - 1))
             await self.storage.flush()
-            notice = self.notifier.build_kick_notice_chain(uid, username, days, reason, decision_desc)
-            await self.notifier.send_group_chain(platform_id, gid, notice)
+            if not silent:
+                notice = self.notifier.build_kick_notice_chain(uid, username, days, reason, decision_desc)
+                await self.notifier.send_group_chain(platform_id, gid, notice)
             logger.info(f"[qian_shui_jian_kong] 已将 {username}({uid}) 移出群 {gid}｜{decision_desc}｜{reason}")
             return True
 
@@ -714,7 +718,7 @@ class QianShuiJianKongPlugin(Star):
             "/潜水 查看 [群号] —— 查看潜水排行\n"
             "/潜水 预警 [群号] —— @ 预警线成员\n"
             "/潜水 斩杀预警 [群号] —— 用自定义文案 @ 斩杀线成员\n"
-            "/潜水 踢人 [群号] —— 批量踢出已到斩杀线成员\n"
+            "/潜水 斩杀 [群号] —— 批量斩杀已到斩杀线成员\n"
             "/潜水 设置阈值 <天数> [群号]\n"
             "/潜水 设置预警 <天数> [群号]\n"
             "/潜水 白名单 添加/移除/查看 <QQ号>\n"
@@ -826,10 +830,13 @@ class QianShuiJianKongPlugin(Star):
             f"{'✅' if ok else '❌'} 已{' @ ' if ok else '尝试提醒 '}群 {gid} 中 {len(candidates)} 名斩杀线成员"
         )
 
-    @lurker.command("踢人")
+    @lurker.command("斩杀")
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def lurker_kick_overdue(self, event: AstrMessageEvent, group_id: str = ""):
-        """批量踢出当前群所有已达到斩杀线的成员。"""
+        """批量斩杀当前群所有已达到斩杀线的成员。
+
+        流程：汇总提醒（一条消息，模板可自定义）→ 统一踢出 → 等待 10 秒 → 发送总结。
+        """
         event.should_call_llm(False)
         if not event.is_admin():
             yield event.plain_result("🚫 该指令需要 AstrBot 管理员权限")
@@ -839,6 +846,7 @@ class QianShuiJianKongPlugin(Star):
             yield event.plain_result(err)
             return
         info = self.storage.list_groups().get(gid, {})
+        platform_id = info.get("platform_id", "")
         now = time.time()
         threshold = max(1, int(self.cfg.get_group("threshold_days", gid)))
         whitelist = self.cfg.get_whitelist(gid)
@@ -855,19 +863,47 @@ class QianShuiJianKongPlugin(Star):
         if not candidates:
             yield event.plain_result(f"ℹ️ 群 {gid} 当前没有已到斩杀线的成员")
             return
+
+        # 1. 汇总提醒：一条总体消息（模板可自定义），名单用真实 @ 组件逐行列出
+        summary_tpl = str(self.cfg.get_group("kick_summary_template", gid)).strip()
+        summary_chain = self.notifier.build_kick_summary_chain(
+            candidates, threshold, template=summary_tpl, group_id=gid
+        )
+        try:
+            await self.notifier.send_group_chain(platform_id, gid, summary_chain)
+            await asyncio.sleep(1.5)
+        except Exception:
+            logger.error(f"[qian_shui_jian_kong] 发送斩杀汇总失败：\n" + traceback.format_exc())
+
+        # 2. 统一踢出
         kicked = 0
         failed = 0
         for days, uid, rec in sorted(candidates, key=lambda item: item[0], reverse=True):
             ok = await self._execute_kick(
                 gid, info, uid, rec, days,
                 f"已连续 {days:.0f} 天未发言，达到 {threshold} 天斩杀线",
-                "管理员手动批量移出",
+                "管理员手动批量斩杀",
+                silent=True,
             )
             if ok:
                 kicked += 1
             else:
                 failed += 1
-        yield event.plain_result(f"✅ 群 {gid} 批量处理完成：踢出 {kicked} 人，失败 {failed} 人")
+
+        # 3. 等待 10 秒
+        await asyncio.sleep(10)
+
+        # 4. 总结：一条消息（模板可自定义，默认「已斩杀 N 位成员 请各位保持活跃」）
+        result_tpl = str(self.cfg.get_group("kick_result_template", gid)).strip()
+        result_text = self.notifier.render_summary_result(
+            result_tpl, count=kicked, group_id=gid
+        )
+        try:
+            await self.notifier.send_group_text(platform_id, gid, result_text)
+        except Exception:
+            logger.error(f"[qian_shui_jian_kong] 发送斩杀总结失败：\n" + traceback.format_exc())
+
+        yield event.plain_result(f"✅ 群 {gid} 斩杀完成：已斩杀 {kicked} 人，失败 {failed} 人")
 
     @lurker.command("设置阈值")
     @filter.permission_type(filter.PermissionType.ADMIN)

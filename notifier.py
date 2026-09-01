@@ -17,9 +17,9 @@ from datetime import datetime
 from astrbot.api.event import MessageChain
 
 try:
-    from .config import DEFAULT_WARN_TEMPLATE, DEFAULT_KILL_WARN_TEMPLATE
+    from .config import DEFAULT_WARN_TEMPLATE, DEFAULT_KILL_WARN_TEMPLATE, DEFAULT_KICK_SUMMARY_TEMPLATE, DEFAULT_KICK_RESULT_TEMPLATE
 except ImportError:  # 兜底：平铺目录导入
-    from config import DEFAULT_WARN_TEMPLATE, DEFAULT_KILL_WARN_TEMPLATE
+    from config import DEFAULT_WARN_TEMPLATE, DEFAULT_KILL_WARN_TEMPLATE, DEFAULT_KICK_SUMMARY_TEMPLATE, DEFAULT_KICK_RESULT_TEMPLATE
 
 logger = logging.getLogger("astrbot")
 
@@ -205,6 +205,29 @@ class Notifier:
             # 每名成员单独一行，At 组件由平台渲染为真实艾特。
             chain.message("\n").at(rec.get("username") or "", uid)
         return chain
+
+    def build_kick_summary_chain(self, candidates, threshold: int, template: str = "", group_id="") -> MessageChain:
+        """斩杀前汇总消息链：一条总体消息列出所有待处置成员（真实 @ 组件逐行）。
+
+        template 支持 {count} {threshold} {names} {group} 占位符；{names} 自动替换为逐行 @ 名单。
+        """
+        text = render_template(
+            template or DEFAULT_KICK_SUMMARY_TEMPLATE,
+            {"count": len(candidates), "threshold": threshold, "names": "", "group": str(group_id or "")},
+        )
+        chain = MessageChain().message(text)
+        if "{names}" in (template or DEFAULT_KICK_SUMMARY_TEMPLATE):
+            chain.message("\n")
+            for _, uid, rec in candidates:
+                chain.message("\n").at(rec.get("username") or "", uid)
+        return chain
+
+    def render_summary_result(self, template: str, count: int, group_id="") -> str:
+        """渲染斩杀完成总结文本（模板可自定义，默认「已斩杀 N 位成员 请各位保持活跃～」）。"""
+        return render_template(
+            template or DEFAULT_KICK_RESULT_TEMPLATE,
+            {"count": count, "group": str(group_id or "")},
+        )
 
     def build_final_warning_chain(self, uid, username: str, days: float, threshold: int, reason: str) -> MessageChain:
         """踢人前的最终警告消息链。"""

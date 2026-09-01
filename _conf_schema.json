@@ -67,6 +67,18 @@
         "default": "🚨 斩杀预警：以下 {count} 名成员已达到 {threshold} 天斩杀线，请及时发言，否则将被移出群聊。",
         "hint": "只在执行 /潜水 斩杀预警 时使用；未知占位符会原样保留"
     },
+    "kick_summary_template": {
+        "description": "斩杀前汇总模板：批量斩杀执行前发送的一条总体消息，支持 {count} 人数、{threshold} 斩杀线天数、{names} 待处置成员名单（自动 @）、{group} 群号；支持多行",
+        "type": "text",
+        "default": "🔪 即将斩杀 {count} 名长期潜水成员（≥{threshold} 天未发言）：\n{names}",
+        "hint": "可用变量：{count} {threshold} {names} {group}；{names} 会被替换为逐行 @ 的名单"
+    },
+    "kick_result_template": {
+        "description": "斩杀完成总结模板：统一斩杀结束后等待 10 秒发送的总结消息，支持 {count} 实际斩杀人数、{group} 群号；支持多行",
+        "type": "text",
+        "default": "⚔️ 已斩杀 {count} 位成员，请各位保持活跃～",
+        "hint": "可用变量：{count} {group}；未知占位符会原样保留"
+    },
     "warn_template": {
         "description": "预警 @ 警告文案模板：支持占位符 {name} 昵称、{days} 已潜水时长、{warn_line} 预警线天数、{threshold} 阈值天数、{remain} 距阈值剩余时长、{group} 群号；消息会自动 @ 该成员，无需在模板里写 @；支持多行",
         "type": "text",
