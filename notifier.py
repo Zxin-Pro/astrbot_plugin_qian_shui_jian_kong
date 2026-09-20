@@ -238,12 +238,29 @@ class Notifier:
         return MessageChain().at(username or "", uid).message(text)
 
     def build_kick_notice_chain(
-        self, uid, username: str, days: float, reason: str, decision_desc: str
+        self, uid, username: str, days: float, reason: str, decision_desc: str,
+        template: str = "",
     ) -> MessageChain:
-        """移出群聊后的群通知消息链。"""
-        text = (
-            f"\n🚪 移出通知：{username or uid}（{uid}）已连续 {fmt_days(days)} 未发言，"
-            f"经{decision_desc}被移出群聊。\n理由：{reason}\n"
-            f"如为误判请联系管理员，欢迎重新入群后保持活跃～"
-        )
+        """移出群聊后的群通知消息链。
+
+        template 非空时按模板渲染（可用变量：{name}/{username} 昵称、{uid}/{qq} QQ号、
+        {days} 已潜水时长、{reason} 理由、{decision} 判定方式、{threshold} 阈值天数）；
+        留空则使用内置默认文案。
+        """
+        variables = {
+            "name": username or uid,
+            "username": username or uid,
+            "uid": uid,
+            "qq": uid,
+            "days": fmt_days(days),
+            "reason": reason,
+            "decision": decision_desc,
+        }
+        text = render_template(template, variables) if template else ""
+        if not text.strip():
+            text = (
+                f"\n🚪 移出通知：{username or uid}（{uid}）已连续 {fmt_days(days)} 未发言，"
+                f"经{decision_desc}被移出群聊。\n理由：{reason}\n"
+                f"如为误判请联系管理员，欢迎重新入群后保持活跃～"
+            )
         return MessageChain().message(text)

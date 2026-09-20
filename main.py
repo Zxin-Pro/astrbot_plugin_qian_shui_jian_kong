@@ -66,7 +66,7 @@ except ImportError:  # 兜底：平铺目录导入
     from notifier import Notifier
     from storage import LurkerStorage, new_member_record
 
-PLUGIN_VERSION = "v1.0.12"
+PLUGIN_VERSION = "v1.0.14"
 PLUGIN_NAME = "astrbot_plugin_qian_shui_jian_kong"
 
 DAY_SECONDS = 86400
@@ -569,7 +569,10 @@ class QianShuiJianKongPlugin(Star):
             self.storage.set_group_meta(gid, "member_count", max(0, int(meta.get("member_count") or 1) - 1))
             await self.storage.flush()
             if not silent:
-                notice = self.notifier.build_kick_notice_chain(uid, username, days, reason, decision_desc)
+                notice = self.notifier.build_kick_notice_chain(
+                    uid, username, days, reason, decision_desc,
+                    template=str(self.cfg.get_group("kick_notice_template", gid)),
+                )
                 await self.notifier.send_group_chain(platform_id, gid, notice)
             logger.info(f"[qian_shui_jian_kong] 已将 {username}({uid}) 移出群 {gid}｜{decision_desc}｜{reason}")
             return True

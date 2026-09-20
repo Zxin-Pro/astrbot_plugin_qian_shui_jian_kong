@@ -61,6 +61,12 @@
         "type": "int",
         "default": 0
     },
+    "kick_notice_template": {
+        "description": "移出通知模板：成员被移出群聊后发送的群通知文案；留空使用内置默认文案；支持多行",
+        "type": "text",
+        "default": "🚪 移出通知：{name}（{uid}）已连续 {days} 未发言，经{decision}被移出群聊。\n理由：{reason}\n如为误判请联系管理员，欢迎重新入群后保持活跃～",
+        "hint": "可用变量：{name} 昵称、{uid} QQ号、{days} 已潜水时长、{reason} 移出理由、{decision} 判定方式；未知占位符会原样保留"
+    },
     "kill_warn_template": {
         "description": "斩杀预警文案模板：支持 {count} 人数、{threshold} 斩杀线天数、{group} 群号；成员会以真实 @ 组件逐行自动添加，支持多行",
         "type": "text",

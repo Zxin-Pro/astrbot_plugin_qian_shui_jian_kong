@@ -32,6 +32,13 @@ DEFAULT_KICK_SUMMARY_TEMPLATE = (
 # 批量斩杀：执行完成后的总结模板
 DEFAULT_KICK_RESULT_TEMPLATE = "⚔️ 已斩杀 {count} 位成员，请各位保持活跃～"
 
+# 移出通知模板（留空 = 使用此默认文案）
+DEFAULT_KICK_NOTICE_TEMPLATE = (
+    "🚪 移出通知：{name}（{uid}）已连续 {days} 未发言，经{decision}被移出群聊。\n"
+    "理由：{reason}\n"
+    "如为误判请联系管理员，欢迎重新入群后保持活跃～"
+)
+
 # 与 _conf_schema.json 保持一致的兜底默认值。
 # 即使 AstrBotConfig 里缺失某个键（例如旧版本配置文件），也能安全取值。
 DEFAULTS = {
@@ -50,6 +57,7 @@ DEFAULTS = {
     "kill_warn_template": DEFAULT_KILL_WARN_TEMPLATE,  # 斩杀预警文案模板
     "kick_summary_template": DEFAULT_KICK_SUMMARY_TEMPLATE,  # 批量斩杀前汇总模板
     "kick_result_template": DEFAULT_KICK_RESULT_TEMPLATE,  # 批量斩杀后总结模板
+    "kick_notice_template": DEFAULT_KICK_NOTICE_TEMPLATE,  # 移出通知模板
 }
 
 # 允许被「群独立配置」覆盖的键（多群独立配置能力的核心）。
@@ -65,6 +73,7 @@ GROUP_OVERRIDABLE = frozenset({
     "kill_warn_template",
     "kick_summary_template",
     "kick_result_template",
+    "kick_notice_template",
 })
 
 _INT_KEYS = frozenset({"threshold_days", "warning_days", "check_interval", "report_top_n",
@@ -156,7 +165,7 @@ class PluginConfig:
     def _sanitize(key, value):
         """按配置项类型清洗原始值，尽力兼容 WebUI / 手改配置文件的各种脏输入。"""
         try:
-            if key in ("warn_template", "kill_warn_template", "kick_summary_template", "kick_result_template"):
+            if key in ("warn_template", "kill_warn_template", "kick_summary_template", "kick_result_template", "kick_notice_template"):
                 # 文案模板：保持原样（可为空，空则使用内置默认文案）
                 return str(value) if value is not None else ""
             if key in _INT_KEYS:

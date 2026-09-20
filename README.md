@@ -42,6 +42,7 @@
 | `max_warns_per_round` | int | `0` | 每轮警告人数上限，**0 = 不限制**（预警区所有人都会被 @）；正数可在超大群限流防刷屏 |
 | `max_kick_evals_per_round` | int | `0` | 每轮自动踢人人数上限，**0 = 不限制**；正数可控制单轮踢人数量 |
 | `warn_template` | text | 内置文案 | 普通预警 @ 文案模板，支持占位符与多行 |
+| `kick_notice_template` | text | 内置文案 | 移出通知文案模板，支持 `{name}`、`{uid}`、`{days}`、`{reason}`、`{decision}` 占位符与多行；留空使用内置默认文案 |
 | `kill_warn_template` | text | 内置文案 | 斩杀预警文案模板，支持 `{count}`、`{threshold}`、`{group}` 占位符与多行；成员名单会以真实 @ 组件逐行追加 |
 
 ### 📝 自定义预警模板
